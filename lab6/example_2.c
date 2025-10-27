@@ -1,0 +1,99 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+#define ASSERT(cond, fmt, ...)                                                 \
+  do {                                                                         \
+    if (!(cond)) {                                                             \
+      fprintf(stderr, "ASSERT FAIL at %s:%d: " fmt "\n", __FILE__, __LINE__,   \
+              ##__VA_ARGS__);                                                  \
+      abort();                                                                 \
+    }                                                                          \
+  } while (0)
+
+typedef struct Node {
+  int value;
+  struct Node *next;
+} Node;
+
+typedef struct {
+  size_t count;
+  long long sum;
+  int min;
+  int max;
+} Info;
+
+static Node *make_node(int v) {
+  Node *n = (Node *)malloc(sizeof(Node));
+  ASSERT(n != NULL, "Out of memory allocating node");
+  n->value = v;
+  n->next = NULL;
+  return n;
+}
+
+static Node *append(Node *tail, Node *n) {
+  if (tail)
+    tail->next = n;
+  return n;
+}
+
+static Info compute_info(const Node *head) {
+  Info info = {0, 0, 0, 0};
+  if (!head)
+    return info;
+  info.count = 1;
+  info.sum = head->value;
+  info.min = head->value;
+  info.max = head->value;
+  const Node *cur = head->next;
+  while (cur) {
+    ++info.count;
+    info.sum += cur->value;
+    if (cur->value < info.min)
+      info.min = cur->value;
+    if (cur->value > info.max)
+      info.max = cur->value;
+    cur = cur->next;
+  }
+  return info;
+}
+
+static long long sum_list(const Node *head) {
+  long long s = 0;
+  for (const Node *cur = head; cur != NULL; cur = cur->next) {
+    s += cur->value;
+  }
+  return s;
+}
+
+static void free_list(Node *head) {
+  while (head) {
+    Node *next = head->next;
+    free(head);
+    head = next;
+  }
+}
+
+int main(void) {
+  Node *head = NULL, *tail = NULL;
+  for (int v = 1; v <= 10; ++v) {
+    Node *n = make_node(v);
+    if (!head) {
+      head = tail = n;
+    } else {
+      tail = append(tail, n);
+    }
+  }
+  ASSERT(head != NULL, "Head must not be NULL after building list");
+  ASSERT(head->next != NULL, "List should have more than one element");
+  Info info = compute_info(head);
+  long long s2 = sum_list(head);
+  ASSERT(info.sum == s2, "Mismatched sums: info.sum=%lld, sum_list=%lld",
+         info.sum, s2);
+  ASSERT(info.count == 10, "Expected count=10, got %zu", info.count);
+  ASSERT(info.min == 1, "Expected min=1, got %d", info.min);
+  ASSERT(info.max == 10, "Expected max=10, got %d", info.max);
+  printf("OK: count=%zu sum=%lld min=%d max=%d\n", info.count, info.sum,
+         info.min, info.max);
+  free_list(head);
+  return 0;
+}

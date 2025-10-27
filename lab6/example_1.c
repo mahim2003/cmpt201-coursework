@@ -1,0 +1,41 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static int index_of(const char *s, char ch) {
+  if (!s)
+    return -1;
+  for (int i = 0; s[i] != '\0'; ++i) {
+    if (s[i] == ch)
+      return i;
+  }
+  return -1;
+}
+
+static int average(const int *a, size_t n) {
+  if (!a || n == 0)
+    return 0;
+  long long sum = 0;
+  for (size_t i = 0; i < n; ++i)
+    sum += a[i];
+  return (int)(sum / (long long)n);
+}
+
+int main(void) {
+  const char *text = "debugging-is-fun";
+  char ch = 'g';
+  int idx = index_of(text, ch);
+
+  int values[] = {10, 20, 30, 40};
+  int avg = average(values, sizeof(values) / sizeof(values[0]));
+
+  printf("Text: \"%s\"\n", text);
+  printf("First '%c' at index: %d\n", ch, idx);
+  printf("Average of {10,20,30,40} = %d\n", avg);
+
+  ch = 'z';
+  idx = index_of(text, ch);
+  printf("First '%c' at index: %d\n", ch, idx);
+
+  return 0;
+}
