@@ -1,0 +1,157 @@
+*
+Questions (from client.c):
+
+1. Server address (IP + port):
+   The client connects to 127.0.0.1 on port 8080. This comes from the sockaddr_in
+   setup where sin_addr is set to 127.0.0.1 and sin_port is set to 8080.
+
+2. UDP or TCP? How do I know?
+   It uses TCP. The socket() call creates a SOCK_STREAM socket, which means TCP.
+
+3. Where does the client get the data it sends?
+   It reads from standard input using fgets() inside the main loop. Whatever the user
+   types is what gets sent through send().
+
+4. How does the client exit?
+   The client stops when fgets() returns NULL (EOF) or when the user types an empty
+   line. After that, the loop breaks and the socket gets closed.
+*/
+
+
+// Client
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <pthread.h>
+
+void run_client() {
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        perror("socket");
+        exit(1);
+    }
+
+    struct sockaddr_in srv;
+    srv.sin_family = AF_INET;
+    srv.sin_port   = htons(8080);
+    srv.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+    if (connect(sockfd, (struct sockaddr*)&srv, sizeof(srv)) < 0) {
+        perror("connect");
+        exit(1);
+    }
+
+    printf("Connected to server. Type to send messages:\n");
+
+    char buf[256];
+    while (1) {
+        printf("> ");
+        if (!fgets(buf, sizeof(buf), stdin)) break;
+        if (strlen(buf) <= 1) break; 
+
+        send(sockfd, buf, strlen(buf), 0);
+    }
+
+    close(sockfd);
+}
+
+
+//Server
+
+typedef struct {
+    int fd;
+    int cid;
+} client_info_t;
+
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+int total_msgs = 0;
+int next_id = 1;
+
+void* handle_client(void* arg) {
+    client_info_t* info = (client_info_t*)arg;
+    int fd = info->fd;
+    int cid = info->cid;
+    free(info);
+
+    char buf[256];
+    int n;
+
+    while ((n = read(fd, buf, sizeof(buf) - 1)) > 0) {
+        buf[n] = '\0';
+
+        pthread_mutex_lock(&lock);
+        total_msgs++;
+        int count = total_msgs;
+        pthread_mutex_unlock(&lock);
+
+        printf("Msg #%4d; Client ID %d: %s", count, cid, buf);
+    }
+
+    printf("Ending thread for client %d\n", cid);
+    close(fd);
+    return NULL;
+}
+
+void run_server() {
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) {
+        perror("socket");
+        exit(1);
+    }
+
+    struct sockaddr_in srv;
+    srv.sin_family = AF_INET;
+    srv.sin_port   = htons(8080);
+    srv.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(sfd, (struct sockaddr*)&srv, sizeof(srv)) < 0) {
+        perror("bind");
+        exit(1);
+    }
+
+    if (listen(sfd, 5) < 0) {
+        perror("listen");
+        exit(1);
+    }
+
+    printf("Server listening on port 8080...\n");
+
+    while (1) {
+        int cfd = accept(sfd, NULL, NULL);
+        if (cfd < 0) {
+            perror("accept");
+            continue;
+        }
+
+        int cid = next_id++;
+        printf("New client created! ID %d on socket FD %d\n", cid, cfd);
+
+        pthread_t t;
+        client_info_t* info = malloc(sizeof(client_info_t));
+        info->fd = cfd;
+        info->cid = cid;
+
+        pthread_create(&t, NULL, handle_client, info);
+        pthread_detach(t);
+    }
+}
+
+//Main
+
+int main(int argc, char** argv) {
+    if (argc < 2) {
+        printf("Usage: ./lab9 [server|client]\n");
+        return 0;
+    }
+
+    if (strcmp(argv[1], "server") == 0)
+        run_server();
+    else
+        run_client();
+
+    return 0;
+}
+
